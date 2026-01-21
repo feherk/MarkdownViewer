@@ -1,8 +1,11 @@
 import SwiftUI
+import Combine
 
 struct ContentView: View {
     @Binding var document: MarkdownDocument
     @State private var showingEditor = false
+    @State private var debouncedText: String = ""
+    @State private var debounceTask: Task<Void, Never>?
 
     var body: some View {
         HSplitView {
@@ -29,11 +32,27 @@ struct ContentView: View {
 
             // Preview panel (always visible)
             ScrollView {
-                MarkdownView(text: document.text)
+                MarkdownView(text: debouncedText)
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(Color(NSColor.textBackgroundColor))
+        }
+        .onAppear {
+            debouncedText = document.text
+        }
+        .onChange(of: document.text) { newValue in
+            // Cancel previous debounce task
+            debounceTask?.cancel()
+            // Start new debounce task - update preview after 150ms of no typing
+            debounceTask = Task {
+                try? await Task.sleep(nanoseconds: 150_000_000)
+                if !Task.isCancelled {
+                    await MainActor.run {
+                        debouncedText = newValue
+                    }
+                }
+            }
         }
         .toolbar {
             ToolbarItem {
