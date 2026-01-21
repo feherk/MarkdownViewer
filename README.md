@@ -68,6 +68,8 @@ Download the latest `.app` from [Releases](https://github.com/feherk/MarkdownVie
 
 MIT License - feel free to use and modify.
 
-## Acknowledgments
+## Author
 
-Built with the assistance of Claude (Anthropic).
+**Károly Fehér** - Concept, design, and project direction
+
+Built with [Claude](https://claude.ai) (Anthropic) - AI pair programming
