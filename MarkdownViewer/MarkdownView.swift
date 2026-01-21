@@ -1,0 +1,356 @@
+import SwiftUI
+
+struct MarkdownView: View {
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach(Array(parseBlocks(text).enumerated()), id: \.offset) { _, block in
+                block
+            }
+        }
+    }
+
+    private func parseBlocks(_ text: String) -> [AnyView] {
+        var views: [AnyView] = []
+        var lines = text.components(separatedBy: "\n")
+        var i = 0
+
+        while i < lines.count {
+            let line = lines[i]
+
+            // Üres sor - kihagyjuk
+            if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                i += 1
+                continue
+            }
+
+            // Code block (``` ... ```) - támogatja az indentált blokkokat is
+            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+            if trimmedLine.hasPrefix("```") {
+                // Indentáció meghatározása
+                let indentation = line.prefix(while: { $0 == " " }).count
+
+                // Nyelv azonosítása (pl. ```bash -> "bash")
+                let language = String(trimmedLine.dropFirst(3)).trimmingCharacters(in: .whitespaces).lowercased()
+                let isTerminal = ["bash", "sh", "shell", "zsh", "terminal", "console"].contains(language)
+
+                var codeLines: [String] = []
+                i += 1
+                while i < lines.count && !lines[i].trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+                    // Eltávolítjuk a közös indentációt a kódból
+                    var codeLine = lines[i]
+                    if codeLine.prefix(indentation).allSatisfy({ $0 == " " }) {
+                        codeLine = String(codeLine.dropFirst(indentation))
+                    }
+                    codeLines.append(codeLine)
+                    i += 1
+                }
+                i += 1 // skip closing ```
+                views.append(AnyView(
+                    CodeBlockView(code: codeLines.joined(separator: "\n"), isTerminal: isTerminal)
+                        .padding(.leading, CGFloat(indentation) * 2.5)
+                ))
+                continue
+            }
+
+            // H1
+            if line.hasPrefix("# ") {
+                let content = String(line.dropFirst(2))
+                views.append(AnyView(
+                    InlineMarkdownText(text: content, fontSize: 28, fontWeight: .bold)
+                ))
+                i += 1
+                continue
+            }
+
+            // H2
+            if line.hasPrefix("## ") {
+                let content = String(line.dropFirst(3))
+                views.append(AnyView(
+                    InlineMarkdownText(text: content, fontSize: 22, fontWeight: .bold)
+                ))
+                i += 1
+                continue
+            }
+
+            // H3
+            if line.hasPrefix("### ") {
+                let content = String(line.dropFirst(4))
+                views.append(AnyView(
+                    InlineMarkdownText(text: content, fontSize: 18, fontWeight: .semibold)
+                ))
+                i += 1
+                continue
+            }
+
+            // H4
+            if line.hasPrefix("#### ") {
+                let content = String(line.dropFirst(5))
+                views.append(AnyView(
+                    InlineMarkdownText(text: content, fontSize: 16, fontWeight: .semibold)
+                ))
+                i += 1
+                continue
+            }
+
+            // Horizontal rule
+            if line == "---" || line == "***" || line == "___" {
+                views.append(AnyView(
+                    Divider().padding(.vertical, 4)
+                ))
+                i += 1
+                continue
+            }
+
+            // Blockquote - összefűzzük a kapcsolódó sorokat
+            if line.hasPrefix("> ") {
+                var quoteLines: [String] = []
+                while i < lines.count && lines[i].hasPrefix("> ") {
+                    quoteLines.append(String(lines[i].dropFirst(2)))
+                    i += 1
+                }
+                let content = quoteLines.joined(separator: " ")
+                views.append(AnyView(
+                    HStack(alignment: .top, spacing: 0) {
+                        Rectangle()
+                            .fill(Color.orange)
+                            .frame(width: 3)
+                        InlineMarkdownText(text: content)
+                            .italic()
+                            .foregroundColor(.secondary)
+                            .padding(.leading, 12)
+                    }
+                ))
+                continue
+            }
+
+            // Lista elem
+            if line.hasPrefix("- ") || line.hasPrefix("* ") {
+                var listItems: [String] = []
+                while i < lines.count && (lines[i].hasPrefix("- ") || lines[i].hasPrefix("* ")) {
+                    listItems.append(String(lines[i].dropFirst(2)))
+                    i += 1
+                }
+                views.append(AnyView(
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(listItems.enumerated()), id: \.offset) { _, item in
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("•")
+                                InlineMarkdownText(text: item)
+                            }
+                        }
+                    }
+                ))
+                continue
+            }
+
+            // Számozott lista
+            if line.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
+                var listItems: [(String, String)] = []
+                while i < lines.count, let match = lines[i].range(of: #"^\d+\.\s"#, options: .regularExpression) {
+                    let number = String(lines[i][..<match.upperBound])
+                    let content = String(lines[i][match.upperBound...])
+                    listItems.append((number, content))
+                    i += 1
+                }
+                views.append(AnyView(
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(listItems.enumerated()), id: \.offset) { _, item in
+                            HStack(alignment: .top, spacing: 4) {
+                                Text(item.0)
+                                    .frame(width: 24, alignment: .leading)
+                                InlineMarkdownText(text: item.1)
+                            }
+                        }
+                    }
+                ))
+                continue
+            }
+
+            // Normál bekezdés - összefűzzük a kapcsolódó sorokat
+            var paragraphLines: [String] = []
+            while i < lines.count {
+                let currentLine = lines[i]
+                // Ha üres sor vagy speciális elem következik, megállunk
+                if currentLine.trimmingCharacters(in: .whitespaces).isEmpty ||
+                   currentLine.hasPrefix("#") ||
+                   currentLine.hasPrefix("```") ||
+                   currentLine.hasPrefix("> ") ||
+                   currentLine.hasPrefix("- ") ||
+                   currentLine.hasPrefix("* ") ||
+                   currentLine == "---" ||
+                   currentLine == "***" ||
+                   currentLine == "___" ||
+                   currentLine.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
+                    break
+                }
+                paragraphLines.append(currentLine)
+                i += 1
+            }
+            if !paragraphLines.isEmpty {
+                let content = paragraphLines.joined(separator: " ")
+                views.append(AnyView(
+                    InlineMarkdownText(text: content)
+                ))
+            }
+        }
+
+        return views
+    }
+
+    private func codeBlockView(_ code: String) -> some View {
+        CodeBlockView(code: code)
+    }
+}
+
+// MARK: - Code Block with Copy Button
+
+struct CodeBlockView: View {
+    let code: String
+    var isTerminal: Bool = false
+    @State private var copied = false
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Text(code)
+                .font(Font.custom("SFMono-Regular", size: 14))
+                .foregroundColor(isTerminal ? Color(red: 0.1, green: 0.5, blue: 0.2) : .primary)
+                .padding(12)
+                .padding(.trailing, 32)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    isTerminal
+                        ? Color(NSColor.systemGray).opacity(0.25)
+                        : Color(NSColor.systemGray).opacity(0.15)
+                )
+                .cornerRadius(6)
+
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(code, forType: .string)
+                copied = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    copied = false
+                }
+            } label: {
+                Image(systemName: copied ? "checkmark" : "square.on.square")
+                    .foregroundColor(copied ? .green : (isTerminal ? .gray : .secondary))
+                    .padding(8)
+            }
+            .buttonStyle(.plain)
+            .help("Másolás vágólapra")
+        }
+    }
+}
+
+// MARK: - Inline Markdown Text with styled code spans
+
+struct InlineMarkdownText: View {
+    let text: String
+    var fontSize: CGFloat = 14
+    var fontWeight: Font.Weight = .regular
+
+    var body: some View {
+        createTextView()
+    }
+
+    private func createTextView() -> Text {
+        let segments = parseSegments(text)
+        var result = Text("")
+
+        for segment in segments {
+            switch segment {
+            case .plain(let str):
+                result = result + Text(parseBasicMarkdown(str))
+                    .font(.system(size: fontSize, weight: fontWeight))
+            case .code(let str):
+                var attrStr = AttributedString(" \(str) ")
+                attrStr.font = .system(size: fontSize - 1, weight: .medium, design: .monospaced)
+                attrStr.backgroundColor = Color(NSColor.systemGray).opacity(0.25)
+                result = result + Text(attrStr)
+            }
+        }
+
+        return result
+    }
+
+    private enum Segment {
+        case plain(String)
+        case code(String)
+    }
+
+    private func parseSegments(_ text: String) -> [Segment] {
+        var segments: [Segment] = []
+        var remaining = text
+
+        while let backtickRange = remaining.range(of: "`") {
+            let before = String(remaining[..<backtickRange.lowerBound])
+            if !before.isEmpty {
+                segments.append(.plain(before))
+            }
+
+            let afterBacktick = String(remaining[backtickRange.upperBound...])
+            if let closingRange = afterBacktick.range(of: "`") {
+                let codeContent = String(afterBacktick[..<closingRange.lowerBound])
+                segments.append(.code(codeContent))
+                remaining = String(afterBacktick[closingRange.upperBound...])
+            } else {
+                segments.append(.plain("`" + afterBacktick))
+                break
+            }
+        }
+
+        if !remaining.isEmpty {
+            segments.append(.plain(remaining))
+        }
+
+        return segments
+    }
+
+    private func parseBasicMarkdown(_ text: String) -> AttributedString {
+        do {
+            return try AttributedString(markdown: text, options: AttributedString.MarkdownParsingOptions(
+                interpretedSyntax: .inlineOnlyPreservingWhitespace
+            ))
+        } catch {
+            return AttributedString(text)
+        }
+    }
+}
+
+#Preview {
+    ScrollView {
+        MarkdownView(text: """
+        # Automatikus sudo jelszómentesen
+
+        A `sudo visudo` paranccsal lehet szerkeszteni a sudo beállításokat. Ez valójában az `/etc/sudoers` fájlt nyitja meg biztonságosan.
+
+        A felhasználónak így kell kinéznie a szabály:
+
+        ```
+        username     ALL=(ALL:ALL) NOPASSWD: ALL
+        ```
+
+        > Tipp: A `username` helyére a saját felhasználónevedet írd. Szóközök és tabok helyzet: usernev[tab]ALL=(ALL:ALL)[space]NOPASSWD:[tab]ALL
+
+        ## Ha a rendszer mégis jelszót kér
+
+        Előfordulhat, hogy a felhasználó rendszergazda csoportban van, és az felülírja ezt a beállítást. Ezért:
+
+        - Ellenőrizd, hogy ki van a `sudo` csoportban:
+
+        ```bash
+        grep '^sudo:.*$' /etc/group | cut -d: -f4
+        ```
+
+        - Ha a felhasználó szerepel benne, akkor vedd ki a csoportból:
+
+        ```
+        sudo deluser username sudo
+        ```
+        """)
+        .padding()
+    }
+    .frame(width: 600, height: 700)
+}
