@@ -11,6 +11,23 @@ struct MarkdownView: View {
         }
     }
 
+    // Fast check for numbered list (e.g., "1. ", "12. ") - replaces slow regex
+    private func parseNumberedListPrefix(_ line: String) -> (prefix: String, content: String)? {
+        var idx = line.startIndex
+        // Check for digits at start
+        while idx < line.endIndex && line[idx].isNumber {
+            idx = line.index(after: idx)
+        }
+        // Must have at least one digit
+        guard idx > line.startIndex else { return nil }
+        // Check for ". " after digits
+        guard idx < line.endIndex && line[idx] == "." else { return nil }
+        let afterDot = line.index(after: idx)
+        guard afterDot < line.endIndex && line[afterDot] == " " else { return nil }
+        let prefixEnd = line.index(after: afterDot)
+        return (String(line[..<prefixEnd]), String(line[prefixEnd...]))
+    }
+
     private func parseBlocks(_ text: String) -> [AnyView] {
         var views: [AnyView] = []
         var lines = text.components(separatedBy: "\n")
@@ -146,12 +163,10 @@ struct MarkdownView: View {
             }
 
             // Numbered list
-            if line.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
+            if parseNumberedListPrefix(line) != nil {
                 var listItems: [(String, String)] = []
-                while i < lines.count, let match = lines[i].range(of: #"^\d+\.\s"#, options: .regularExpression) {
-                    let number = String(lines[i][..<match.upperBound])
-                    let content = String(lines[i][match.upperBound...])
-                    listItems.append((number, content))
+                while i < lines.count, let parsed = parseNumberedListPrefix(lines[i]) {
+                    listItems.append((parsed.prefix, parsed.content))
                     i += 1
                 }
                 views.append(AnyView(
@@ -182,7 +197,7 @@ struct MarkdownView: View {
                    currentLine == "---" ||
                    currentLine == "***" ||
                    currentLine == "___" ||
-                   currentLine.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
+                   parseNumberedListPrefix(currentLine) != nil {
                     break
                 }
                 paragraphLines.append(currentLine)
