@@ -19,26 +19,26 @@ struct MarkdownView: View {
         while i < lines.count {
             let line = lines[i]
 
-            // Üres sor - kihagyjuk
+            // Empty line - skip
             if line.trimmingCharacters(in: .whitespaces).isEmpty {
                 i += 1
                 continue
             }
 
-            // Code block (``` ... ```) - támogatja az indentált blokkokat is
+            // Code block (``` ... ```) - supports indented blocks
             let trimmedLine = line.trimmingCharacters(in: .whitespaces)
             if trimmedLine.hasPrefix("```") {
-                // Indentáció meghatározása
+                // Determine indentation
                 let indentation = line.prefix(while: { $0 == " " }).count
 
-                // Nyelv azonosítása (pl. ```bash -> "bash")
+                // Identify language (e.g. ```bash -> "bash")
                 let language = String(trimmedLine.dropFirst(3)).trimmingCharacters(in: .whitespaces).lowercased()
                 let isTerminal = ["bash", "sh", "shell", "zsh", "terminal", "console"].contains(language)
 
                 var codeLines: [String] = []
                 i += 1
                 while i < lines.count && !lines[i].trimmingCharacters(in: .whitespaces).hasPrefix("```") {
-                    // Eltávolítjuk a közös indentációt a kódból
+                    // Remove common indentation from code
                     var codeLine = lines[i]
                     if codeLine.prefix(indentation).allSatisfy({ $0 == " " }) {
                         codeLine = String(codeLine.dropFirst(indentation))
@@ -103,7 +103,7 @@ struct MarkdownView: View {
                 continue
             }
 
-            // Blockquote - összefűzzük a kapcsolódó sorokat
+            // Blockquote - join related lines
             if line.hasPrefix("> ") {
                 var quoteLines: [String] = []
                 while i < lines.count && lines[i].hasPrefix("> ") {
@@ -125,7 +125,7 @@ struct MarkdownView: View {
                 continue
             }
 
-            // Lista elem
+            // List item
             if line.hasPrefix("- ") || line.hasPrefix("* ") {
                 var listItems: [String] = []
                 while i < lines.count && (lines[i].hasPrefix("- ") || lines[i].hasPrefix("* ")) {
@@ -145,7 +145,7 @@ struct MarkdownView: View {
                 continue
             }
 
-            // Számozott lista
+            // Numbered list
             if line.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
                 var listItems: [(String, String)] = []
                 while i < lines.count, let match = lines[i].range(of: #"^\d+\.\s"#, options: .regularExpression) {
@@ -168,11 +168,11 @@ struct MarkdownView: View {
                 continue
             }
 
-            // Normál bekezdés - összefűzzük a kapcsolódó sorokat
+            // Normal paragraph - join related lines
             var paragraphLines: [String] = []
             while i < lines.count {
                 let currentLine = lines[i]
-                // Ha üres sor vagy speciális elem következik, megállunk
+                // If empty line or special element follows, stop
                 if currentLine.trimmingCharacters(in: .whitespaces).isEmpty ||
                    currentLine.hasPrefix("#") ||
                    currentLine.hasPrefix("```") ||
@@ -239,7 +239,7 @@ struct CodeBlockView: View {
                     .padding(8)
             }
             .buttonStyle(.plain)
-            .help("Másolás vágólapra")
+            .help("Copy to clipboard")
         }
     }
 }
@@ -322,33 +322,36 @@ struct InlineMarkdownText: View {
 #Preview {
     ScrollView {
         MarkdownView(text: """
-        # Automatikus sudo jelszómentesen
+        # Markdown Viewer
 
-        A `sudo visudo` paranccsal lehet szerkeszteni a sudo beállításokat. Ez valójában az `/etc/sudoers` fájlt nyitja meg biztonságosan.
+        A simple and elegant **Markdown viewer** for macOS. Open any `.md` file and see it rendered beautifully.
 
-        A felhasználónak így kell kinéznie a szabály:
+        ## Features
+
+        - Live preview of Markdown files
+        - Support for `inline code` and code blocks
+        - Syntax highlighting for terminal commands
+
+        > Tip: Use the editor toggle button in the toolbar to edit your documents.
+
+        ### Code Blocks
+
+        Regular code block:
 
         ```
-        username     ALL=(ALL:ALL) NOPASSWD: ALL
+        let greeting = "Hello, World!"
+        print(greeting)
         ```
 
-        > Tipp: A `username` helyére a saját felhasználónevedet írd. Szóközök és tabok helyzet: usernev[tab]ALL=(ALL:ALL)[space]NOPASSWD:[tab]ALL
-
-        ## Ha a rendszer mégis jelszót kér
-
-        Előfordulhat, hogy a felhasználó rendszergazda csoportban van, és az felülírja ezt a beállítást. Ezért:
-
-        - Ellenőrizd, hogy ki van a `sudo` csoportban:
+        Terminal/bash commands appear in green:
 
         ```bash
-        grep '^sudo:.*$' /etc/group | cut -d: -f4
+        echo "Hello from the terminal"
         ```
 
-        - Ha a felhasználó szerepel benne, akkor vedd ki a csoportból:
+        ---
 
-        ```
-        sudo deluser username sudo
-        ```
+        Made with SwiftUI for macOS.
         """)
         .padding()
     }

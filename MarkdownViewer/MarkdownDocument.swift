@@ -10,7 +10,7 @@ extension UTType {
 struct MarkdownDocument: FileDocument {
     var text: String
 
-    init(text: String = "# Új dokumentum\n\nKezdj el írni...") {
+    init(text: String = "# New Document\n\nStart typing...") {
         self.text = text
     }
 

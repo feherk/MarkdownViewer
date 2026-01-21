@@ -10,8 +10,8 @@ struct MarkdownViewerApp: App {
         }
         .commands {
             CommandGroup(replacing: .help) {
-                Button("Markdown Viewer Súgó") {
-                    // Súgó ablak
+                Button("Markdown Viewer Help") {
+                    // Help window
                 }
             }
         }
@@ -20,7 +20,7 @@ struct MarkdownViewerApp: App {
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Ablak méretezése és középre helyezése
+        // Window sizing and centering
         NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { notification in
             if let window = notification.object as? NSWindow {
                 let screenSize = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
@@ -33,8 +33,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        // Csak akkor lépjen ki, ha volt megnyitott dokumentum (nem az Open panel záródik)
-        // Kis késleltetéssel ellenőrizzük, hogy van-e még dokumentum
+        // Only quit if there was an open document (not when the Open panel closes)
+        // Check with a small delay if there are still documents
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             if NSDocumentController.shared.documents.isEmpty && NSApp.windows.filter({ $0.isVisible }).isEmpty {
                 NSApp.terminate(nil)

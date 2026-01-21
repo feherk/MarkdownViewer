@@ -6,12 +6,12 @@ struct ContentView: View {
 
     var body: some View {
         HSplitView {
-            // Szerkesztő panel (opcionális)
+            // Editor panel (optional)
             if showingEditor {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
                         Image(systemName: "pencil")
-                        Text("Szerkesztő")
+                        Text("Editor")
                             .font(.headline)
                         Spacer()
                     }
@@ -27,7 +27,7 @@ struct ContentView: View {
                 .frame(minWidth: 300)
             }
 
-            // Előnézet panel (mindig látható)
+            // Preview panel (always visible)
             ScrollView {
                 MarkdownView(text: document.text)
                     .padding()
@@ -45,7 +45,7 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: showingEditor ? "pencil.circle.fill" : "pencil.circle")
                 }
-                .help(showingEditor ? "Szerkesztő elrejtése" : "Szerkesztő megjelenítése")
+                .help(showingEditor ? "Hide Editor" : "Show Editor")
             }
         }
         .frame(minWidth: 600, idealWidth: 900, minHeight: 400, idealHeight: 700)
