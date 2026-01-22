@@ -183,6 +183,35 @@ struct MarkdownView: View {
                 continue
             }
 
+            // ASCII art detection (box-drawing characters)
+            if containsBoxDrawingCharacters(line) {
+                var asciiArtLines: [String] = []
+                while i < lines.count {
+                    let currentLine = lines[i]
+                    // Stop at empty line or markdown elements
+                    if currentLine.trimmingCharacters(in: .whitespaces).isEmpty ||
+                       currentLine.hasPrefix("#") ||
+                       currentLine.hasPrefix("```") ||
+                       currentLine.hasPrefix("> ") {
+                        break
+                    }
+                    // Continue if current line has box-drawing chars or is part of the block
+                    if containsBoxDrawingCharacters(currentLine) ||
+                       (!currentLine.hasPrefix("- ") && !currentLine.hasPrefix("* ") && parseNumberedListPrefix(currentLine) == nil) {
+                        asciiArtLines.append(currentLine)
+                        i += 1
+                    } else {
+                        break
+                    }
+                }
+                if !asciiArtLines.isEmpty {
+                    views.append(AnyView(
+                        AsciiArtBlockView(content: asciiArtLines.joined(separator: "\n"))
+                    ))
+                }
+                continue
+            }
+
             // Normal paragraph - join related lines
             var paragraphLines: [String] = []
             while i < lines.count {
@@ -217,6 +246,24 @@ struct MarkdownView: View {
     private func codeBlockView(_ code: String) -> some View {
         CodeBlockView(code: code)
     }
+
+    // Check if line contains box-drawing characters (Unicode box drawing block)
+    private func containsBoxDrawingCharacters(_ text: String) -> Bool {
+        // Box Drawing characters: U+2500 to U+257F
+        // Block Elements: U+2580 to U+259F
+        // Geometric Shapes: U+25A0 to U+25FF (includes ▼ ▲ etc.)
+        // Arrows: U+2190 to U+21FF
+        for char in text.unicodeScalars {
+            let value = char.value
+            if (value >= 0x2500 && value <= 0x257F) ||  // Box Drawing
+               (value >= 0x2580 && value <= 0x259F) ||  // Block Elements
+               (value >= 0x25A0 && value <= 0x25FF) ||  // Geometric Shapes
+               (value >= 0x2190 && value <= 0x21FF) {   // Arrows
+                return true
+            }
+        }
+        return false
+    }
 }
 
 // MARK: - Code Block with Copy Button
@@ -227,9 +274,11 @@ struct CodeBlockView: View {
     @State private var copied = false
 
     var body: some View {
+        // Replace spaces with non-breaking spaces to preserve alignment
+        let preservedCode = code.replacingOccurrences(of: " ", with: "\u{00A0}")
         ZStack(alignment: .topTrailing) {
-            Text(code)
-                .font(Font.custom("SFMono-Regular", size: 14))
+            Text(preservedCode)
+                .font(Font.custom("Monaco", size: 16))
                 .foregroundColor(isTerminal ? Color(red: 0.1, green: 0.5, blue: 0.2) : .primary)
                 .padding(12)
                 .padding(.trailing, 32)
@@ -256,6 +305,24 @@ struct CodeBlockView: View {
             .buttonStyle(.plain)
             .help("Copy to clipboard")
         }
+    }
+}
+
+// MARK: - ASCII Art Block (for box-drawing characters)
+
+struct AsciiArtBlockView: View {
+    let content: String
+
+    var body: some View {
+        // Replace regular spaces with non-breaking spaces to preserve alignment
+        let preservedContent = content.replacingOccurrences(of: " ", with: "\u{00A0}")
+        Text(preservedContent)
+            .font(Font.custom("Monaco", size: 16))
+            .foregroundColor(.primary)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(NSColor.systemGray).opacity(0.1))
+            .cornerRadius(6)
     }
 }
 
