@@ -183,6 +183,32 @@ struct MarkdownView: View {
                 continue
             }
 
+            // Table detection (lines with | characters)
+            if isTableRow(line) {
+                var tableLines: [String] = []
+                while i < lines.count && isTableRow(lines[i]) {
+                    tableLines.append(lines[i])
+                    i += 1
+                }
+                if tableLines.count >= 2 {
+                    // Parse table
+                    let parsedTable = parseTable(tableLines)
+                    if !parsedTable.headers.isEmpty {
+                        views.append(AnyView(
+                            TableBlockView(headers: parsedTable.headers, rows: parsedTable.rows, alignments: parsedTable.alignments)
+                        ))
+                        continue
+                    }
+                }
+                // If not a valid table, treat as regular text
+                for tableLine in tableLines {
+                    views.append(AnyView(
+                        InlineMarkdownText(text: tableLine)
+                    ))
+                }
+                continue
+            }
+
             // ASCII art detection (box-drawing characters)
             if containsBoxDrawingCharacters(line) {
                 var asciiArtLines: [String] = []
@@ -245,6 +271,91 @@ struct MarkdownView: View {
 
     private func codeBlockView(_ code: String) -> some View {
         CodeBlockView(code: code)
+    }
+
+    // Check if line is a table row (contains | and is not in code block)
+    private func isTableRow(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        // Must contain at least one |
+        guard trimmed.contains("|") else { return false }
+        // Should not be a code block
+        guard !trimmed.hasPrefix("```") else { return false }
+        return true
+    }
+
+    // Check if line is a table separator (|---|---|)
+    private func isTableSeparator(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        // Remove all valid separator characters
+        let cleaned = trimmed.replacingOccurrences(of: "|", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .replacingOccurrences(of: ":", with: "")
+            .replacingOccurrences(of: " ", with: "")
+        return cleaned.isEmpty && trimmed.contains("-")
+    }
+
+    // Parse table alignment from separator row
+    private func parseAlignment(_ cell: String) -> Alignment {
+        let trimmed = cell.trimmingCharacters(in: .whitespaces)
+        let hasLeft = trimmed.hasPrefix(":")
+        let hasRight = trimmed.hasSuffix(":")
+        if hasLeft && hasRight { return .center }
+        if hasRight { return .trailing }
+        return .leading
+    }
+
+    // Parse table cells from a row
+    private func parseTableCells(_ line: String) -> [String] {
+        var trimmed = line.trimmingCharacters(in: .whitespaces)
+        // Remove leading and trailing |
+        if trimmed.hasPrefix("|") {
+            trimmed = String(trimmed.dropFirst())
+        }
+        if trimmed.hasSuffix("|") {
+            trimmed = String(trimmed.dropLast())
+        }
+        return trimmed.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+    }
+
+    // Parse complete table
+    private func parseTable(_ lines: [String]) -> (headers: [String], rows: [[String]], alignments: [Alignment]) {
+        guard lines.count >= 2 else { return ([], [], []) }
+
+        // Find separator row
+        var separatorIndex = -1
+        for (index, line) in lines.enumerated() {
+            if isTableSeparator(line) {
+                separatorIndex = index
+                break
+            }
+        }
+
+        // If no separator found, treat as simple table without header
+        if separatorIndex == -1 {
+            let allRows = lines.map { parseTableCells($0) }
+            let maxCols = allRows.map { $0.count }.max() ?? 0
+            let alignments = Array(repeating: Alignment.leading, count: maxCols)
+            return ([], allRows, alignments)
+        }
+
+        // Parse header (row before separator)
+        var headers: [String] = []
+        if separatorIndex > 0 {
+            headers = parseTableCells(lines[separatorIndex - 1])
+        }
+
+        // Parse alignments from separator
+        let separatorCells = parseTableCells(lines[separatorIndex])
+        let alignments = separatorCells.map { parseAlignment($0) }
+
+        // Parse data rows (after separator)
+        var rows: [[String]] = []
+        for i in (separatorIndex + 1)..<lines.count {
+            let cells = parseTableCells(lines[i])
+            rows.append(cells)
+        }
+
+        return (headers, rows, alignments)
     }
 
     // Check if line contains box-drawing characters (Unicode box drawing block)
@@ -323,6 +434,65 @@ struct AsciiArtBlockView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(NSColor.systemGray).opacity(0.1))
             .cornerRadius(6)
+    }
+}
+
+// MARK: - Table Block View
+
+struct TableBlockView: View {
+    let headers: [String]
+    let rows: [[String]]
+    let alignments: [Alignment]
+
+    var body: some View {
+        let columnCount = max(headers.count, rows.first?.count ?? 0, alignments.count)
+
+        VStack(alignment: .leading, spacing: 0) {
+            // Header row
+            if !headers.isEmpty {
+                HStack(spacing: 0) {
+                    ForEach(0..<columnCount, id: \.self) { colIndex in
+                        let text = colIndex < headers.count ? headers[colIndex] : ""
+                        let alignment = colIndex < alignments.count ? alignments[colIndex] : .leading
+                        Text(text)
+                            .font(.system(size: 14, weight: .bold))
+                            .frame(maxWidth: .infinity, alignment: alignment)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color(NSColor.systemGray).opacity(0.2))
+                    }
+                }
+                .overlay(
+                    Rectangle()
+                        .stroke(Color(NSColor.systemGray).opacity(0.3), lineWidth: 1)
+                )
+            }
+
+            // Data rows
+            ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
+                HStack(spacing: 0) {
+                    ForEach(0..<columnCount, id: \.self) { colIndex in
+                        let text = colIndex < row.count ? row[colIndex] : ""
+                        let alignment = colIndex < alignments.count ? alignments[colIndex] : .leading
+                        InlineMarkdownText(text: text)
+                            .frame(maxWidth: .infinity, alignment: alignment)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(rowIndex % 2 == 0 ? Color.clear : Color(NSColor.systemGray).opacity(0.05))
+                    }
+                }
+                .overlay(
+                    Rectangle()
+                        .stroke(Color(NSColor.systemGray).opacity(0.2), lineWidth: 0.5)
+                )
+            }
+        }
+        .background(Color(NSColor.systemGray).opacity(0.05))
+        .cornerRadius(6)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color(NSColor.systemGray).opacity(0.3), lineWidth: 1)
+        )
     }
 }
 

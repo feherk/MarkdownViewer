@@ -6,6 +6,15 @@ struct ContentView: View {
     @State private var showingEditor = false
     @State private var debouncedText: String = ""
     @State private var debounceTask: Task<Void, Never>?
+    @AppStorage("appearanceMode") private var appearanceMode: Int = 0 // 0 = system, 1 = light, 2 = dark
+
+    // Detect if currently in dark mode (either set explicitly or system default)
+    private var isDarkMode: Bool {
+        if appearanceMode == 1 { return false }
+        if appearanceMode == 2 { return true }
+        // System mode - detect actual appearance
+        return NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+    }
 
     var body: some View {
         HSplitView {
@@ -40,6 +49,7 @@ struct ContentView: View {
         }
         .onAppear {
             debouncedText = document.text
+            applyAppearance()
         }
         .onChange(of: document.text) { newValue in
             // Cancel previous debounce task
@@ -57,6 +67,16 @@ struct ContentView: View {
         .toolbar {
             ToolbarItem {
                 Button {
+                    // Toggle based on current actual appearance
+                    appearanceMode = isDarkMode ? 1 : 2
+                    applyAppearance()
+                } label: {
+                    Image(systemName: isDarkMode ? "moon.fill" : "sun.max.fill")
+                }
+                .help(isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode")
+            }
+            ToolbarItem {
+                Button {
                     withAnimation {
                         showingEditor.toggle()
                         adjustWindowSize(forEditor: showingEditor)
@@ -68,6 +88,17 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 600, idealWidth: 900, minHeight: 400, idealHeight: 700)
+    }
+
+    private func applyAppearance() {
+        switch appearanceMode {
+        case 1:
+            NSApp.appearance = NSAppearance(named: .aqua)
+        case 2:
+            NSApp.appearance = NSAppearance(named: .darkAqua)
+        default:
+            NSApp.appearance = nil // Follow system
+        }
     }
 
     private func adjustWindowSize(forEditor showEditor: Bool) {
