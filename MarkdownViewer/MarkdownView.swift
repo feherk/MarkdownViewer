@@ -142,11 +142,13 @@ struct MarkdownView: View {
                 continue
             }
 
-            // List item
-            if line.hasPrefix("- ") || line.hasPrefix("* ") {
+            // List item (supports indented lists)
+            if trimmedLine.hasPrefix("- ") || trimmedLine.hasPrefix("* ") {
                 var listItems: [String] = []
-                while i < lines.count && (lines[i].hasPrefix("- ") || lines[i].hasPrefix("* ")) {
-                    listItems.append(String(lines[i].dropFirst(2)))
+                while i < lines.count {
+                    let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+                    guard trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") else { break }
+                    listItems.append(String(trimmed.dropFirst(2)))
                     i += 1
                 }
                 views.append(AnyView(
@@ -162,10 +164,10 @@ struct MarkdownView: View {
                 continue
             }
 
-            // Numbered list
-            if parseNumberedListPrefix(line) != nil {
+            // Numbered list (supports indented lists)
+            if parseNumberedListPrefix(trimmedLine) != nil {
                 var listItems: [(String, String)] = []
-                while i < lines.count, let parsed = parseNumberedListPrefix(lines[i]) {
+                while i < lines.count, let parsed = parseNumberedListPrefix(lines[i].trimmingCharacters(in: .whitespaces)) {
                     listItems.append((parsed.prefix, parsed.content))
                     i += 1
                 }
@@ -242,17 +244,18 @@ struct MarkdownView: View {
             var paragraphLines: [String] = []
             while i < lines.count {
                 let currentLine = lines[i]
+                let currentTrimmed = currentLine.trimmingCharacters(in: .whitespaces)
                 // If empty line or special element follows, stop
-                if currentLine.trimmingCharacters(in: .whitespaces).isEmpty ||
-                   currentLine.hasPrefix("#") ||
-                   currentLine.hasPrefix("```") ||
-                   currentLine.hasPrefix("> ") ||
-                   currentLine.hasPrefix("- ") ||
-                   currentLine.hasPrefix("* ") ||
+                if currentTrimmed.isEmpty ||
+                   currentTrimmed.hasPrefix("#") ||
+                   currentTrimmed.hasPrefix("```") ||
+                   currentTrimmed.hasPrefix("> ") ||
+                   currentTrimmed.hasPrefix("- ") ||
+                   currentTrimmed.hasPrefix("* ") ||
                    currentLine == "---" ||
                    currentLine == "***" ||
                    currentLine == "___" ||
-                   parseNumberedListPrefix(currentLine) != nil {
+                   parseNumberedListPrefix(currentTrimmed) != nil {
                     break
                 }
                 paragraphLines.append(currentLine)
