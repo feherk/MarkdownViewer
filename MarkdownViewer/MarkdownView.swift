@@ -519,9 +519,9 @@ struct InlineMarkdownText: View {
             case .plain(let str):
                 result = result + Text(parseBasicMarkdown(str))
                     .font(.system(size: fontSize, weight: fontWeight))
-            case .code(let str):
+            case .code(let str, let isBold):
                 var attrStr = AttributedString(" \(str) ")
-                attrStr.font = .system(size: fontSize - 1, weight: .medium, design: .monospaced)
+                attrStr.font = .system(size: fontSize - 1, weight: isBold ? .bold : .medium, design: .monospaced)
                 attrStr.backgroundColor = Color(NSColor.systemGray).opacity(0.25)
                 result = result + Text(attrStr)
             }
@@ -532,7 +532,7 @@ struct InlineMarkdownText: View {
 
     private enum Segment {
         case plain(String)
-        case code(String)
+        case code(String, isBold: Bool)
     }
 
     private func parseSegments(_ text: String) -> [Segment] {
@@ -548,7 +548,7 @@ struct InlineMarkdownText: View {
             let afterBacktick = String(remaining[backtickRange.upperBound...])
             if let closingRange = afterBacktick.range(of: "`") {
                 let codeContent = String(afterBacktick[..<closingRange.lowerBound])
-                segments.append(.code(codeContent))
+                segments.append(.code(codeContent, isBold: false))
                 remaining = String(afterBacktick[closingRange.upperBound...])
             } else {
                 segments.append(.plain("`" + afterBacktick))
@@ -560,7 +560,47 @@ struct InlineMarkdownText: View {
             segments.append(.plain(remaining))
         }
 
-        return segments
+        // Post-process: detect bold/italic markers wrapping code spans
+        // e.g. [plain("**"), code("x"), plain("**")] → [code("x", isBold: true)]
+        var processed: [Segment] = []
+        var i = 0
+        while i < segments.count {
+            if case .code(let code, _) = segments[i] {
+                // Check if previous plain ends with ** and next plain starts with **
+                let prevBold = !processed.isEmpty && {
+                    if case .plain(let p) = processed.last! { return p.hasSuffix("**") }
+                    return false
+                }()
+                let nextBold = i + 1 < segments.count && {
+                    if case .plain(let p) = segments[i + 1] { return p.hasPrefix("**") }
+                    return false
+                }()
+
+                if prevBold && nextBold {
+                    // Trim ** from previous plain
+                    if case .plain(let p) = processed.last! {
+                        let trimmed = String(p.dropLast(2))
+                        processed.removeLast()
+                        if !trimmed.isEmpty { processed.append(.plain(trimmed)) }
+                    }
+                    processed.append(.code(code, isBold: true))
+                    // Trim ** from next plain
+                    if case .plain(let p) = segments[i + 1] {
+                        let trimmed = String(p.dropFirst(2))
+                        if !trimmed.isEmpty { processed.append(.plain(trimmed)) }
+                    }
+                    i += 2
+                } else {
+                    processed.append(segments[i])
+                    i += 1
+                }
+            } else {
+                processed.append(segments[i])
+                i += 1
+            }
+        }
+
+        return processed
     }
 
     private func parseBasicMarkdown(_ text: String) -> AttributedString {
