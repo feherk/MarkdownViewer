@@ -71,7 +71,7 @@ struct ContentView: View {
                     appearanceMode = isDarkMode ? 1 : 2
                     applyAppearance()
                 } label: {
-                    Image(systemName: isDarkMode ? "moon.fill" : "sun.max.fill")
+                    Image(systemName: isDarkMode ? "sun.max.fill" : "moon.fill")
                 }
                 .help(isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode")
             }
