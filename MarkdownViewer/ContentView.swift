@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Binding var document: MarkdownDocument
@@ -86,8 +87,17 @@ struct ContentView: View {
                 }
                 .help(showingEditor ? "Hide Editor" : "Show Editor")
             }
+            ToolbarItem {
+                Button {
+                    exportPDF()
+                } label: {
+                    Image(systemName: "arrow.down.doc")
+                }
+                .help("Export as PDF (⌘E)")
+            }
         }
         .frame(minWidth: 600, idealWidth: 900, minHeight: 400, idealHeight: 700)
+        .focusedSceneValue(\.exportPDF, exportPDF)
     }
 
     private func applyAppearance() {
@@ -98,6 +108,69 @@ struct ContentView: View {
             NSApp.appearance = NSAppearance(named: .darkAqua)
         default:
             NSApp.appearance = nil // Follow system
+        }
+    }
+
+    @MainActor
+    private func exportPDF() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+
+        // Try to derive filename from the window title
+        let baseName = NSApp.keyWindow?.title ?? "document"
+        let pdfName = baseName.hasSuffix(".md") || baseName.hasSuffix(".markdown")
+            ? (baseName as NSString).deletingPathExtension + ".pdf"
+            : baseName + ".pdf"
+        panel.nameFieldStringValue = pdfName
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        // A4 dimensions in points (72 dpi)
+        let pageWidth: CGFloat = 595
+        let pageHeight: CGFloat = 842
+        let margin: CGFloat = 40
+
+        // Build the view for PDF rendering — always light mode, A4 width
+        let pdfContent = MarkdownView(text: debouncedText)
+            .padding(margin)
+            .frame(width: pageWidth)
+            .environment(\.colorScheme, .light)
+
+        let renderer = ImageRenderer(content: pdfContent)
+        renderer.scale = 2.0
+
+        renderer.render { size, draw in
+            var mediaBox = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
+            let usableHeight = pageHeight - margin * 2
+
+            guard let consumer = CGDataConsumer(url: url as CFURL),
+                  let pdfContext = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else { return }
+
+            let totalPages = max(1, Int(ceil(size.height / usableHeight)))
+
+            for page in 0..<totalPages {
+                let yOffset = CGFloat(page) * usableHeight
+
+                pdfContext.beginPage(mediaBox: &mediaBox)
+                pdfContext.saveGState()
+
+                // Clip to page area
+                pdfContext.clip(to: CGRect(x: 0, y: margin, width: pageWidth, height: usableHeight))
+
+                // Flip to SwiftUI coordinate system (origin top-left)
+                pdfContext.translateBy(x: 0, y: pageHeight)
+                pdfContext.scaleBy(x: 1, y: -1)
+
+                // Scroll to the current page slice
+                pdfContext.translateBy(x: 0, y: -yOffset)
+
+                draw(pdfContext)
+
+                pdfContext.restoreGState()
+                pdfContext.endPage()
+            }
+
+            pdfContext.closePDF()
         }
     }
 

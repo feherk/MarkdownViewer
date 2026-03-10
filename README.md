@@ -23,6 +23,7 @@ A lightweight, fast, native macOS Markdown editor and viewer built with SwiftUI.
 - **Tables** — Full Markdown table support with column alignment and alternating row colors
 - **Rich Markdown** — Headers, bold, italic, inline code, blockquotes, lists, horizontal rules
 - **ASCII Art** — Preserves box-drawing characters and monospaced alignment
+- **PDF Export** — Export to paginated A4 PDF with ⌘E or from the File menu
 - **Document-Based** — Open, edit, and save `.md`, `.markdown`, and `.txt` files
 - **Multi-Document** — Work with multiple files at the same time
 - **Native macOS** — Built with SwiftUI for a fast, lightweight, native experience
@@ -51,6 +52,7 @@ Build and run with **⌘R** in Xcode.
 | Toggle editor | Click the pencil icon in the toolbar |
 | Switch theme | Click the sun/moon icon in the toolbar |
 | Copy code block | Click the copy icon on any code block |
+| Export to PDF | **File → Export as PDF** (⌘E) |
 
 ## Supported Markdown Syntax
 
