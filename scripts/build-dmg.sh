@@ -21,7 +21,7 @@ DMG_PATH="$PROJECT_DIR/dist/$DMG_NAME.dmg"
 
 # Code signing
 SIGN_IDENTITY="Developer ID Application: Károly Fehér (YG66KQ8KDT)"
-NOTARIZE_PROFILE="vc-notarize"
+NOTARIZE_PROFILE="notarytool"
 
 echo "==> Building $APP_NAME v${VERSION} DMG installer"
 
@@ -72,29 +72,57 @@ codesign --verify --verbose "$APP_BUNDLE"
 # ── 3. Create DMG ───────────────────────────────────────────────────────
 echo "==> Creating DMG..."
 
+rm -f "$DMG_PATH"
+
+APP_ICNS="$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+DMG_BG="$SCRIPT_DIR/dmg-background.png"
+DMG_BG_2X="$SCRIPT_DIR/dmg-background@2x.png"
+
 DMG_STAGING="$BUILD_DIR/dmg-staging"
 mkdir -p "$DMG_STAGING"
 cp -R "$APP_BUNDLE" "$DMG_STAGING/"
-ln -s /Applications "$DMG_STAGING/Applications"
 
-rm -f "$DMG_PATH"
+# Create background folder with both 1x and 2x images
+mkdir -p "$DMG_STAGING/.background"
+cp "$DMG_BG" "$DMG_STAGING/.background/bg.png"
+cp "$DMG_BG_2X" "$DMG_STAGING/.background/bg@2x.png"
 
 DMG_RW="$BUILD_DIR/$DMG_NAME-rw.dmg"
 
 hdiutil create -volname "$APP_NAME" \
     -srcfolder "$DMG_STAGING" \
     -ov -format UDRW \
+    -fs HFS+ \
+    -size 20m \
     "$DMG_RW"
 
-# Set volume icon from the app bundle
-APP_ICNS="$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+# Mount rw image
+MOUNT_DIR=$(hdiutil attach "$DMG_RW" -readwrite -noverify -noautoopen | grep "/Volumes/" | sed 's/.*\/Volumes/\/Volumes/')
+
+# Create Finder alias to /Applications and set its icon
+echo "==> Creating Applications alias with icon..."
+/usr/bin/osascript -e "tell application \"Finder\" to make alias file to POSIX file \"/Applications\" at POSIX file \"$MOUNT_DIR\" with properties {name:\"Applications\"}"
+python3 -c "
+import Cocoa
+ws = Cocoa.NSWorkspace.sharedWorkspace()
+icon = ws.iconForFile_('/Applications')
+ws.setIcon_forFile_options_(icon, '$MOUNT_DIR/Applications', 0)
+print('Applications icon set')
+"
+
+# Set volume icon
 if [ -f "$APP_ICNS" ]; then
     echo "==> Setting volume icon..."
-    MOUNT_DIR=$(hdiutil attach "$DMG_RW" -readwrite -noverify -noautoopen | grep "/Volumes/" | sed 's/.*\/Volumes/\/Volumes/')
     cp "$APP_ICNS" "$MOUNT_DIR/.VolumeIcon.icns"
     SetFile -a C "$MOUNT_DIR"
-    hdiutil detach "$MOUNT_DIR" -quiet
 fi
+
+# Generate .DS_Store with background alias (must run on mounted volume)
+echo "==> Generating .DS_Store with background..."
+python3 "$SCRIPT_DIR/gen-ds-store.py" "$MOUNT_DIR"
+
+sync
+hdiutil detach "$MOUNT_DIR" -quiet
 
 # Convert to compressed read-only
 hdiutil convert "$DMG_RW" -format UDZO -o "$DMG_PATH"

@@ -1,34 +1,14 @@
 import SwiftUI
 
-private struct ExportPDFKey: FocusedValueKey {
-    typealias Value = () -> Void
-}
-
-extension FocusedValues {
-    var exportPDF: (() -> Void)? {
-        get { self[ExportPDFKey.self] }
-        set { self[ExportPDFKey.self] = newValue }
-    }
-}
-
 @main
 struct MarkdownViewerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @FocusedValue(\.exportPDF) var exportPDF
 
     var body: some Scene {
         DocumentGroup(newDocument: MarkdownDocument()) { file in
             ContentView(document: file.$document)
         }
         .commands {
-            CommandGroup(after: .saveItem) {
-                Divider()
-                Button("Export as PDF...") {
-                    exportPDF?()
-                }
-                .keyboardShortcut("e", modifiers: .command)
-                .disabled(exportPDF == nil)
-            }
             CommandGroup(replacing: .help) {
                 Button("Markdown Viewer Help") {
                     // Help window
