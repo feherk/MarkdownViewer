@@ -9,6 +9,7 @@ struct MarkdownView: View {
                 block
             }
         }
+        .textSelection(.enabled)
     }
 
     // Fast check for numbered list (e.g., "1. ", "12. ") - replaces slow regex
